@@ -51,7 +51,7 @@ class VideoController extends Controller
             if ($video->processed === false) {
                 return response()->json([
                     'message' => 'O vídeo ainda está sendo processado, por favor, aguarde.',
-                    'video' => new VideoResource($video),
+                    'data' => new VideoResource($video),
                     'status' => 'processing',
                 ]);
             }
