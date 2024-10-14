@@ -4,15 +4,18 @@ namespace App\Services;
 
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
-use Illuminate\Support\Facades\Storage;
 
 class HLSService
 {
     protected Filesystem $s3Disk;
+
     protected string $tempVideosPath;
+
     protected string $tempHlsPath;
+
     protected string $ffmpegPath;
 
     public function __construct()
@@ -31,15 +34,15 @@ class HLSService
         $this->downloadVideo($videoPath, $localVideoPath);
         $this->validateLocalVideo($localVideoPath);
 
-        Log::info("Arquivo de vídeo baixado com sucesso: {$localVideoPath} com tamanho: " . filesize($localVideoPath) . " bytes.");
+        Log::info("Arquivo de vídeo baixado com sucesso: {$localVideoPath} com tamanho: ".filesize($localVideoPath).' bytes.');
 
         $localHLSDir = $this->getLocalHlsDir($videoPath);
         $this->ensureDirectoryExists($localHLSDir);
 
-        $localOutputPath = $localHLSDir . '/index.m3u8';
+        $localOutputPath = $localHLSDir.'/index.m3u8';
         $this->executeFFmpeg($localVideoPath, $localOutputPath);
 
-        $outputS3Dir = 'hls/' . pathinfo($videoPath, PATHINFO_FILENAME);
+        $outputS3Dir = 'hls/'.pathinfo($videoPath, PATHINFO_FILENAME);
         $this->uploadHlsFiles($localHLSDir, $outputS3Dir);
 
         $this->cleanupLocalFiles($localVideoPath, $localHlsDir);
@@ -49,13 +52,13 @@ class HLSService
 
     protected function getLocalVideoPath(string $videoPath): string
     {
-        return "{$this->tempVideosPath}/" . basename($videoPath);
+        return "{$this->tempVideosPath}/".basename($videoPath);
     }
 
     protected function ensureDirectoryExists(string $path): void
     {
-        if (!is_dir($path)) {
-            if (!mkdir($path, 0755, true) && !is_dir($path)) {
+        if (! is_dir($path)) {
+            if (! mkdir($path, 0755, true) && ! is_dir($path)) {
                 throw new \Exception("Erro ao criar o diretório: {$path}");
             }
         }
@@ -65,15 +68,15 @@ class HLSService
     {
         try {
             $videoContent = $this->s3Disk->get($videoPath);
-            Storage::disk('local')->put('temp_videos/' . basename($videoPath), $videoContent);
+            Storage::disk('local')->put('temp_videos/'.basename($videoPath), $videoContent);
         } catch (\Exception $e) {
-            throw new \Exception('Erro ao baixar o vídeo do S3: ' . $e->getMessage());
+            throw new \Exception('Erro ao baixar o vídeo do S3: '.$e->getMessage());
         }
     }
 
     protected function validateLocalVideo(string $localVideoPath): void
     {
-        if (!file_exists($localVideoPath)) {
+        if (! file_exists($localVideoPath)) {
             throw new \Exception('Erro ao baixar o vídeo do S3.');
         }
 
@@ -84,7 +87,7 @@ class HLSService
 
     protected function getLocalHlsDir(string $videoPath): string
     {
-        return "{$this->tempHlsPath}/" . pathinfo($videoPath, PATHINFO_FILENAME);
+        return "{$this->tempHlsPath}/".pathinfo($videoPath, PATHINFO_FILENAME);
     }
 
     protected function executeFFmpeg(string $inputPath, string $outputPath): void
@@ -102,12 +105,12 @@ class HLSService
 
         $process->run();
 
-        if (!$process->isSuccessful()) {
-            Log::error('Erro no processo FFmpeg: ' . $process->getErrorOutput());
+        if (! $process->isSuccessful()) {
+            Log::error('Erro no processo FFmpeg: '.$process->getErrorOutput());
             throw new ProcessFailedException($process);
         }
 
-        if (!file_exists($outputPath)) {
+        if (! file_exists($outputPath)) {
             throw new \Exception('Erro ao gerar o arquivo HLS.');
         }
     }
@@ -119,7 +122,7 @@ class HLSService
             try {
                 $this->s3Disk->put("{$outputS3Dir}/{$fileName}", file_get_contents($file));
             } catch (\Exception $e) {
-                throw new \Exception('Erro ao enviar arquivos HLS para o S3: ' . $e->getMessage());
+                throw new \Exception('Erro ao enviar arquivos HLS para o S3: '.$e->getMessage());
             }
         }
     }
