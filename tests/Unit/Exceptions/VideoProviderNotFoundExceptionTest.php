@@ -21,7 +21,7 @@ class VideoProviderNotFoundExceptionTest extends TestCase
     public function test_video_provider_not_found_exception_default_message()
     {
         // Instanciando a exceção sem passar uma mensagem customizada
-        $exception = new VideoProviderNotFoundException();
+        $exception = new VideoProviderNotFoundException;
 
         // Verificando se a mensagem padrão da exceção é usada
         $this->assertEquals('Provedor de vídeo não encontrado', $exception->getMessage());

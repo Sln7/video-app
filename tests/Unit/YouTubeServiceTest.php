@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use App\Services\VideoProviders\YouTubeService;
 use App\Exceptions\VideoNotFoundException;
+use App\Services\VideoProviders\YouTubeService;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -22,17 +22,17 @@ class YouTubeServiceTest extends TestCase
                             'description' => 'Test Description',
                             'thumbnails' => [
                                 'high' => [
-                                    'url' => 'https://example.com/thumbnail.jpg'
-                                ]
-                            ]
-                        ]
-                    ]
-                ]
-            ], 200)
+                                    'url' => 'https://example.com/thumbnail.jpg',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
         ]);
 
         // Instanciando o serviço
-        $service = new YouTubeService();
+        $service = new YouTubeService;
 
         $videoInfo = $service->getVideoInfo('valid_video_id');
 
@@ -49,12 +49,12 @@ class YouTubeServiceTest extends TestCase
         // Mockando uma resposta falha (vídeo não encontrado)
         Http::fake([
             'https://www.googleapis.com/youtube/v3/videos*' => Http::response([
-                'items' => []
-            ], 200)
+                'items' => [],
+            ], 200),
         ]);
 
         // Instanciando o serviço
-        $service = new YouTubeService();
+        $service = new YouTubeService;
 
         // Verificando se a exceção é lançada
         $this->expectException(VideoNotFoundException::class);
@@ -67,11 +67,11 @@ class YouTubeServiceTest extends TestCase
     {
         // Mockando uma falha de requisição HTTP
         Http::fake([
-            'https://www.googleapis.com/youtube/v3/videos*' => Http::response(null, 500)
+            'https://www.googleapis.com/youtube/v3/videos*' => Http::response(null, 500),
         ]);
 
         // Instanciando o serviço
-        $service = new YouTubeService();
+        $service = new YouTubeService;
 
         // Verificando se a exceção é lançada
         $this->expectException(VideoNotFoundException::class);

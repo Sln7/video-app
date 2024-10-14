@@ -10,7 +10,7 @@ class YouTubeServiceIntegrationTest extends TestCase
     /** @test */
     public function test_real_integration_with_youtube_api()
     {
-        $service = new YouTubeService();
+        $service = new YouTubeService;
 
         $videoInfo = $service->getVideoInfo('wDchsz8nmbo');
 
