@@ -39,4 +39,8 @@ return [
         'api_key' => env('YOUTUBE_API_KEY'),
     ],
 
+    'ffmpeg' => [
+        'path' => env('FFMPEG_PATH', 'ffmpeg'),
+    ],
+
 ];
