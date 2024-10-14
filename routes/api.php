@@ -15,7 +15,6 @@ Route::middleware('auth:api')->group(function () {
     Route::prefix('videos')->controller(VideoController::class)->group(function () {
         Route::post('/', 'store');
         Route::get('/{id}', 'show');
-        Route::patch('/{id}', 'update');
         Route::patch('/{id}/like', 'toggleLike');
     });
 });
