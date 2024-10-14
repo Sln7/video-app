@@ -1,0 +1,253 @@
+openapi: 3.0.0
+info:
+  title: API
+  description: Documentação da API do projeto Video APP
+  version: '1.0.0'
+  termsOfService: 'http://localhost'
+  contact:
+    name: Solano Martins
+    email: solanomatheusmartins@gmail.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost
+
+components:
+  schemas:
+    Login:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: solanomatheusmartins@gmail.com
+        password:
+          type: string
+          format: password
+          example: 123417
+
+    Register:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Solano
+        email:
+          type: string
+          format: email
+          example: solanomatheusmartins@gmail.com
+        password:
+          type: string
+          format: password
+          example: 123417
+        password_confirmation:
+          type: string
+          format: password
+          example: 123417
+
+    Video:
+      type: object
+      properties:
+        id:
+          type: string
+          example: a2768f2d-3db4-4e92-a896-8229ef769383
+        title:
+          type: string
+          example: Vídeo de Exemplo
+        source:
+          type: string
+          example: youtube
+        video_id:
+          type: string
+          example: Ks-_Mh1QhMc
+
+  responses:
+    UnauthorizedError:
+      description: Acesso negado. Token inválido ou expirado.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Não autorizado
+
+    BadRequestError:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Erro de validação
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/login:
+    post:
+      summary: Login
+      description: Realiza o login de um usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+      responses:
+        '200':
+          description: Login bem-sucedido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/register:
+    post:
+      summary: Register
+      description: Criação de um novo usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+      responses:
+        '201':
+          description: Registro bem-sucedido
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  /api/videos:
+    get:
+      summary: List Videos
+      description: Lista vídeos com base em parâmetros de pesquisa
+      parameters:
+        - name: search
+          in: query
+          description: Termo de pesquisa para buscar vídeos
+          schema:
+            type: string
+        - name: order
+          in: query
+          description: Ordem de exibição (asc/desc)
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Página atual para paginação
+          schema:
+            type: integer
+            example: 2
+        - name: per_page
+          in: query
+          description: Quantidade de vídeos por página
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Lista de vídeos retornada com sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Video'
+
+    post:
+      summary: Store Video
+      description: Armazena um vídeo do YouTube ou faz upload de um arquivo de vídeo.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                video_id:
+                  type: string
+                  example: Ks-_Mh1QhMc
+                source:
+                  type: string
+                  example: youtube
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                source:
+                  type: string
+                  example: hls
+                video:
+                  type: string
+                  format: binary
+                  description: Arquivo de vídeo
+                title:
+                  type: string
+                  example: Vídeo HLS
+      responses:
+        '201':
+          description: Vídeo armazenado com sucesso
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/videos/{id}:
+    get:
+      summary: Detail Video
+      description: Retorna os detalhes de um vídeo específico
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: a2768f2d-3db4-4e92-a896-8229ef769383
+      responses:
+        '200':
+          description: Detalhes do vídeo retornados com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Video'
+        '404':
+          description: Vídeo não encontrado
+
+    patch:
+      summary: Like Video
+      description: Dá like em um vídeo
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: 345bd4c4-bb21-4ef5-a17d-cc07cf36f5c1
+      responses:
+        '200':
+          description: Like aplicado com sucesso
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
