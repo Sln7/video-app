@@ -21,7 +21,6 @@ class Video extends Model
         'thumbnail_url',
         'views',
         'likes',
-        'user_id',
         'embed_url',
         'processed',
     ];
