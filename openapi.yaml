@@ -61,7 +61,7 @@ components:
           example: youtube
         video_id:
           type: string
-          example: Ks-_Mh1QhMc
+          example: wDchsz8nmbo
 
   responses:
     UnauthorizedError:
