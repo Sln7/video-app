@@ -1,11 +1,11 @@
 services:
     laravel.test:
         build:
-            context: docker/8.3
+            context: docker/8.4
             dockerfile: Dockerfile
             args:
                 WWWGROUP: '${WWWGROUP}'
-        image: sail-8.3/app
+        image: sail-8.4/app
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         ports:
@@ -87,7 +87,7 @@ services:
             retries: 3
             timeout: 5s
     queue-worker:
-        image: sail-8.3/app
+        image: sail-8.4/app
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         user: '${WWWUSER}'
@@ -101,7 +101,7 @@ services:
             - pgsql
             - redis
     horizon:
-        image: sail-8.3/app
+        image: sail-8.4/app
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         user: '${WWWUSER}'
