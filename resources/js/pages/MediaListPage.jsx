@@ -27,6 +27,10 @@ export default function MediaListPage() {
         navigate('/login');
     }
 
+    function getThumbnailUrl(item) {
+        return item.thumbnail_url ?? item.thumbnail ?? null;
+    }
+
     return (
         <div className="min-h-screen bg-neutral-950 text-white">
 
@@ -81,7 +85,9 @@ export default function MediaListPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {media.map(item => (
+                        {media.map(item => {
+                            const thumbnailUrl = getThumbnailUrl(item);
+                            return (
                             <div
                                 key={item.public_id}
                                 onClick={() => navigate(`/player/${item.public_id}`)}
@@ -89,9 +95,9 @@ export default function MediaListPage() {
                             >
                                 {/* Thumbnail */}
                                 <div className="relative aspect-square bg-neutral-800 flex items-center justify-center overflow-hidden">
-                                    {item.thumbnail_url ? (
+                                    {thumbnailUrl ? (
                                         <img
-                                            src={item.thumbnail_url}
+                                            src={thumbnailUrl}
                                             alt={item.title}
                                             className="w-full h-full object-cover"
                                         />
@@ -120,7 +126,8 @@ export default function MediaListPage() {
                                     </span>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </main>
