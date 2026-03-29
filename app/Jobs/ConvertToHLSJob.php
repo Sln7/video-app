@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\Video;
+use App\Models\Media;
 use App\Services\HLSService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,22 +13,17 @@ class ConvertToHLSJob implements ShouldQueue
 {
     use Dispatchable, Queueable;
 
-    protected $video;
+    public function __construct(protected Media $media) {}
 
-    public function __construct(Video $video)
-    {
-        $this->video = $video;
-    }
-
-    public function handle(HLSService $hlsService)
+    public function handle(HLSService $hlsService): void
     {
         try {
-            Log::info('Iniciando conversão para HLS: '.$this->video->public_id);
-            $hlsService->convertToHLS($this->video->video_path);
-            Log::info('Conversão concluída com sucesso para o vídeo: '.$this->video->public_id);
-            $this->video->update(['processed' => true]);
+            Log::info('Starting HLS conversion: '.$this->media->public_id);
+            $hlsService->convertToHLS($this->media->video_path);
+            Log::info('HLS conversion complete: '.$this->media->public_id);
+            $this->media->update(['processed' => true]);
         } catch (\Exception $e) {
-            Log::error('Erro ao processar job ConvertToHLSJob: '.$e->getMessage());
+            Log::error('ConvertToHLSJob failed: '.$e->getMessage());
             Log::error($e->getTraceAsString());
         }
     }

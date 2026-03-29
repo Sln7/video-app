@@ -7,37 +7,43 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Video extends Model
+class Media extends Model
 {
     use HasFactory, PublicIdTrait, SoftDeletes;
+
+    protected $table = 'media';
 
     protected $fillable = [
         'title',
         'description',
+        'media_type',
         'source',
         'video_id',
         'video_path',
         'hls_url',
+        'embed_url',
         'thumbnail_url',
         'views',
         'likes',
-        'embed_url',
         'processed',
+        'artist',
+        'album',
+        'duration_seconds',
     ];
 
     protected $appends = ['likes_count'];
 
-    public static function findByPublicId($publicId): self
+    public static function findByPublicId(string $publicId): self
     {
         return self::where('public_id', $publicId)->firstOrFail();
     }
 
     public function getLikesCountAttribute(): int
     {
-        return $this->likes()->count();
+        return $this->favorites()->count();
     }
 
-    public function scopeFilter($query, array $filters)
+    public function scopeFilter($query, array $filters): void
     {
         $query->when($filters['processed'] ?? null, function ($query, $processed) {
             $query->where('processed', $processed);
@@ -48,14 +54,19 @@ class Video extends Model
         $query->when($filters['search'] ?? null, function ($query, $search) {
             $query->where(function ($query) use ($search) {
                 $query->where('title', 'like', '%'.$search.'%')
-                    ->orWhere('description', 'like', '%'.$search.'%');
+                    ->orWhere('description', 'like', '%'.$search.'%')
+                    ->orWhere('artist', 'like', '%'.$search.'%');
             });
+        });
+
+        $query->when($filters['media_type'] ?? null, function ($query, $mediaType) {
+            $query->where('media_type', $mediaType);
         });
     }
 
-    public function likes()
+    public function favorites()
     {
-        return $this->belongsToMany(User::class, VideoLike::class);
+        return $this->belongsToMany(User::class, 'media_favorites', 'media_id', 'user_id');
     }
 
     public function user()

@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\Video;
+use App\Models\Media;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -11,18 +11,13 @@ class UpdateLikesCount implements ShouldQueue
 {
     use Dispatchable, Queueable;
 
-    protected $videoId;
+    public function __construct(
+        private int $mediaId,
+        private int $increment
+    ) {}
 
-    protected $increment;
-
-    public function __construct($videoId, $increment)
+    public function handle(): void
     {
-        $this->videoId = $videoId;
-        $this->increment = $increment;
-    }
-
-    public function handle()
-    {
-        Video::where('id', $this->videoId)->increment('likes', $this->increment);
+        Media::where('id', $this->mediaId)->increment('likes', $this->increment);
     }
 }

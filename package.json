@@ -6,8 +6,15 @@
         "build": "vite build"
     },
     "devDependencies": {
+        "@vitejs/plugin-react": "^4.0",
         "axios": "^1.8.0",
         "laravel-vite-plugin": "^1.2",
         "vite": "^6.0"
+    },
+    "dependencies": {
+        "lucide-react": "^0.400.0",
+        "react": "^19.0",
+        "react-dom": "^19.0",
+        "react-player": "^2.16"
     }
 }

@@ -6,24 +6,20 @@ use Illuminate\Http\Request;
 
 class UploadService
 {
-    public function uploadVideoAndThumbnail(Request $request)
+    public function uploadVideoAndThumbnail(Request $request): array
     {
-        $videoFile = $request->file('video');
-        $videoPath = $videoFile->store('videos', 's3');
+        $videoPath = $request->file('file')->store('videos', 's3');
+        $fileName  = pathinfo($videoPath, PATHINFO_FILENAME);
 
-        $fileName = pathinfo($videoPath, PATHINFO_FILENAME);
-
-        $futureHLSPath = 'videos/hls/'.$fileName.'/index.m3u8';
-
+        $thumbnailUrl = null;
         if ($request->hasFile('thumbnail')) {
-            $thumbnailFile = $request->file('thumbnail');
-            $thumbnailPath = $thumbnailFile->store('videos/thumbnails', 's3');
+            $thumbnailUrl = $request->file('thumbnail')->store('videos/thumbnails', 's3');
         }
 
         return [
-            'video_path' => $videoPath,
-            'future_hls_path' => $futureHLSPath,
-            'thumbnail_url' => $thumbnailPath ?? null,
+            'video_path'      => $videoPath,
+            'future_hls_path' => 'videos/hls/'.$fileName.'/index.m3u8',
+            'thumbnail_url'   => $thumbnailUrl,
         ];
     }
 }

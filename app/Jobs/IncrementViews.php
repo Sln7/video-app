@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\Video;
+use App\Models\Media;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -11,15 +11,10 @@ class IncrementViews implements ShouldQueue
 {
     use Dispatchable, Queueable;
 
-    protected $video;
+    public function __construct(protected Media $media) {}
 
-    public function __construct(Video $video)
+    public function handle(): void
     {
-        $this->video = $video;
-    }
-
-    public function handle()
-    {
-        $this->video->increment('views');
+        $this->media->increment('views');
     }
 }
