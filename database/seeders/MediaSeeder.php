@@ -6,6 +6,8 @@ use App\Models\Media;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Process;
 
 class MediaSeeder extends Seeder
 {
@@ -110,12 +112,12 @@ class MediaSeeder extends Seeder
         ];
 
         foreach ($audioTracks as $index => $track) {
-            $audioPath = sprintf('music/seed-track-%02d.wav', $index + 1);
+            $audioPath = sprintf('music/seed-track-%02d.mp3', $index + 1);
             $thumbnailPath = sprintf('thumbnails/seed-track-%02d.svg', $index + 1);
 
             Storage::disk('public')->put(
                 $audioPath,
-                $this->generateWaveAudio($track['duration_seconds'], $track['frequency'])
+                $this->generateSeedAudio($track['duration_seconds'], $track['frequency'])
             );
 
             Storage::disk('public')->put(
@@ -147,52 +149,49 @@ class MediaSeeder extends Seeder
         }
     }
 
-        private function generateWaveAudio(int $durationSeconds, int $frequency): string
-        {
-                $sampleRate = 16000;
-                $channels = 1;
-                $bitsPerSample = 16;
-                $amplitude = 11000;
-                $totalSamples = $sampleRate * max(1, $durationSeconds);
-                $byteRate = $sampleRate * $channels * ($bitsPerSample / 8);
-                $blockAlign = $channels * ($bitsPerSample / 8);
-                $pcmData = '';
-
-                for ($sample = 0; $sample < $totalSamples; $sample++) {
-                        $time = $sample / $sampleRate;
-                        $tone = sin(2 * M_PI * $frequency * $time)
-                                + (0.35 * sin(2 * M_PI * ($frequency / 2) * $time))
-                                + (0.15 * sin(2 * M_PI * ($frequency * 1.5) * $time));
-
-                        $value = (int) round(($amplitude / 1.5) * $tone);
-                        $pcmData .= pack('v', $value < 0 ? $value + 65536 : $value);
-                }
-
-                $dataSize = strlen($pcmData);
-                $riffSize = 36 + $dataSize;
-
-                return 'RIFF'
-                        . pack('V', $riffSize)
-                        . 'WAVE'
-                        . 'fmt '
-                        . pack('V', 16)
-                        . pack('v', 1)
-                        . pack('v', $channels)
-                        . pack('V', $sampleRate)
-                        . pack('V', $byteRate)
-                        . pack('v', $blockAlign)
-                        . pack('v', $bitsPerSample)
-                        . 'data'
-                        . pack('V', $dataSize)
-                        . $pcmData;
+    private function generateSeedAudio(int $durationSeconds, int $frequency): string
+    {
+        $tempBasePath = tempnam(sys_get_temp_dir(), 'seed-audio-');
+        if ($tempBasePath === false) {
+            throw new \RuntimeException('Unable to allocate temporary file for seeded audio.');
         }
 
-        private function generateArtworkSvg(string $title, string $artist): string
-        {
-                $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
-                $safeArtist = htmlspecialchars($artist, ENT_QUOTES, 'UTF-8');
+        $outputPath = $tempBasePath.'.mp3';
+        @unlink($tempBasePath);
 
-                return <<<SVG
+        $process = new Process([
+            'ffmpeg',
+            '-f', 'lavfi',
+            '-i', sprintf('sine=frequency=%d:duration=%d', $frequency, max(1, $durationSeconds)),
+            '-q:a', '6',
+            '-acodec', 'libmp3lame',
+            '-y',
+            $outputPath,
+        ]);
+
+        $process->run();
+
+        if (! $process->isSuccessful() || ! file_exists($outputPath)) {
+            @unlink($outputPath);
+            throw new ProcessFailedException($process);
+        }
+
+        $contents = file_get_contents($outputPath);
+        @unlink($outputPath);
+
+        if ($contents === false) {
+            throw new \RuntimeException('Unable to read generated seeded audio file.');
+        }
+
+        return $contents;
+    }
+
+    private function generateArtworkSvg(string $title, string $artist): string
+    {
+        $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+        $safeArtist = htmlspecialchars($artist, ENT_QUOTES, 'UTF-8');
+
+        return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" fill="none">
     <defs>
         <linearGradient id="cover" x1="100" y1="120" x2="1040" y2="1100" gradientUnits="userSpaceOnUse">
@@ -212,5 +211,5 @@ class MediaSeeder extends Seeder
     <text x="110" y="1060" fill="#CBD5E1" font-family="Verdana, sans-serif" font-size="28">Seeded local audio preview</text>
 </svg>
 SVG;
-        }
+    }
 }
