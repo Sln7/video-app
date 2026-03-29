@@ -74,13 +74,52 @@ export default function UniversalPlayer({ media }) {
     const [fullscreen, setFullscreen] = useState(false);
 
     const playerRef   = useRef(null);
+    const audioRef = useRef(null);
+    const audioProgressRef = useRef(null);
     const containerRef = useRef(null);
     const hideTimer   = useRef(null);
+    const pendingSeekRef = useRef(0);
+    const [audioError, setAudioError] = useState('');
 
     const isAudio = media?.media_type === 'audio';
     const isYT    = media?.source === 'youtube';
     const resolvedUrl = resolveUrl(media);
     const url = isYT ? normalizeYouTubeEmbedUrl(resolvedUrl) : resolvedUrl;
+
+    function seekToSeconds(seconds) {
+        if (isAudio) {
+            if (!audioRef.current || !duration) return;
+            const clamped = Math.max(0, Math.min(duration, seconds));
+            audioRef.current.currentTime = clamped;
+            return;
+        }
+        playerRef.current?.seekTo(seconds, 'seconds');
+    }
+
+    function seekToFraction(fraction) {
+        if (isAudio) {
+            if (!audioRef.current || !duration) return;
+            const clamped = Math.max(0, Math.min(1, fraction));
+            audioRef.current.currentTime = clamped * duration;
+            setPlayed(clamped);
+            return;
+        }
+        playerRef.current?.seekTo(fraction, 'fraction');
+    }
+
+    function seekAudioFromPointer(clientX) {
+        if (!isAudio || !audioProgressRef.current) return;
+
+        const rect = audioProgressRef.current.getBoundingClientRect();
+        if (!rect.width) return;
+
+        const fraction = (clientX - rect.left) / rect.width;
+        const clamped = Math.max(0, Math.min(1, fraction));
+
+        pendingSeekRef.current = clamped;
+        setPlayed(clamped);
+        seekToFraction(clamped);
+    }
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────
     useEffect(() => {
@@ -88,12 +127,29 @@ export default function UniversalPlayer({ media }) {
             if (e.target.tagName === 'INPUT') return;
             if (e.code === 'Space')       { e.preventDefault(); setPlaying(v => !v); }
             if (e.code === 'KeyM')        setMuted(v => !v);
-            if (e.code === 'ArrowRight')  playerRef.current?.seekTo(played * duration + 10, 'seconds');
-            if (e.code === 'ArrowLeft')   playerRef.current?.seekTo(Math.max(0, played * duration - 10), 'seconds');
+            if (e.code === 'ArrowRight')  seekToSeconds(played * duration + 10);
+            if (e.code === 'ArrowLeft')   seekToSeconds(Math.max(0, played * duration - 10));
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [played, duration]);
+    }, [played, duration, isAudio]);
+
+    useEffect(() => {
+        if (!isAudio || !audioRef.current) return;
+
+        const audio = audioRef.current;
+        audio.volume = volume;
+        audio.muted = muted;
+
+        if (playing) {
+            audio.play().catch(() => {
+                setPlaying(false);
+                setAudioError('Nao foi possivel reproduzir este audio.');
+            });
+        } else {
+            audio.pause();
+        }
+    }, [playing, isAudio, volume, muted]);
 
     // ── Auto-hide controls for video ───────────────────────────────────
     const resetHideTimer = useCallback(() => {
@@ -138,15 +194,34 @@ export default function UniversalPlayer({ media }) {
 
     // ── Progress bar interaction ───────────────────────────────────────
     function onSeekChange(e) {
-        setPlayed(parseFloat(e.target.value));
+        const nextValue = parseFloat(e.target.value);
+        pendingSeekRef.current = nextValue;
+        setPlayed(nextValue);
+
+        if (isAudio) {
+            seekToFraction(nextValue);
+        }
     }
     function onSeekMouseDown() { setSeeking(true); }
-    function onSeekMouseUp(e) {
+    function onSeekMouseUp() {
         setSeeking(false);
-        playerRef.current?.seekTo(parseFloat(e.target.value));
+        seekToFraction(pendingSeekRef.current);
     }
     function onProgress(state) {
         if (!seeking) setPlayed(state.played);
+    }
+
+    function onAudioTimeUpdate() {
+        if (!audioRef.current || seeking || !duration) return;
+        setPlayed(audioRef.current.currentTime / duration);
+    }
+
+    function onAudioLoadedMetadata() {
+        if (!audioRef.current) return;
+        setDuration(audioRef.current.duration || 0);
+        setReady(true);
+        setAudioError('');
+        pendingSeekRef.current = 0;
     }
 
     // ── Shared controls bar ────────────────────────────────────────────
@@ -214,7 +289,7 @@ export default function UniversalPlayer({ media }) {
                 <div className="flex items-center gap-4">
                     {!isYT && (
                         <button
-                            onClick={() => playerRef.current?.seekTo(Math.max(0, played * duration - 10), 'seconds')}
+                            onClick={() => seekToSeconds(Math.max(0, played * duration - 10))}
                             className="text-white/70 hover:text-white transition-colors"
                             aria-label="-10s"
                         >
@@ -224,7 +299,7 @@ export default function UniversalPlayer({ media }) {
 
                     <button
                         onClick={() => setPlaying(v => !v)}
-                        disabled={!ready}
+                        disabled={!isAudio && !ready}
                         className="flex items-center justify-center w-12 h-12 rounded-full bg-white hover:bg-white/90 active:scale-95 transition-all disabled:opacity-40"
                         aria-label={playing ? 'Pause' : 'Play'}
                     >
@@ -236,7 +311,7 @@ export default function UniversalPlayer({ media }) {
 
                     {!isYT && (
                         <button
-                            onClick={() => playerRef.current?.seekTo(Math.min(1, played + 10 / duration), 'fraction')}
+                            onClick={() => seekToFraction(Math.min(1, played + 10 / duration))}
                             className="text-white/70 hover:text-white transition-colors"
                             aria-label="+10s"
                         >
@@ -261,74 +336,195 @@ export default function UniversalPlayer({ media }) {
         </div>
     );
 
+    const AudioControls = () => (
+        <div className="mt-8 w-full space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 shadow-lg shadow-black/20">
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.24em] text-white/45">
+                    <span>Agora tocando</span>
+                    <span>{Math.round(played * 100)}%</span>
+                </div>
+
+                <div className="mt-4 flex items-center gap-3">
+                    <span className="w-11 text-right text-sm tabular-nums text-white/75">
+                        {formatTime(played * duration)}
+                    </span>
+                    <div
+                        ref={audioProgressRef}
+                        className="relative flex-1 cursor-pointer py-3"
+                        onPointerDown={event => seekAudioFromPointer(event.clientX)}
+                    >
+                        <div className="h-2 rounded-full bg-white/10" />
+                        <div
+                            className="absolute left-0 top-0 h-2 rounded-full bg-gradient-to-r from-cyan-300 via-emerald-300 to-lime-200"
+                            style={{ top: '0.75rem', width: `${played * 100}%` }}
+                        />
+                        <div
+                            className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-white/30 bg-white shadow-[0_0_0_6px_rgba(255,255,255,0.08)]"
+                            style={{ left: `calc(${played * 100}% - 0.5rem)` }}
+                        />
+                    </div>
+                    <span className="w-11 text-sm tabular-nums text-white/55">
+                        {formatTime(duration)}
+                    </span>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-4 sm:gap-6">
+                <button
+                    onClick={() => seekToSeconds(Math.max(0, played * duration - 10))}
+                    className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white"
+                    aria-label="-10s"
+                >
+                    <SkipBack size={20} />
+                </button>
+
+                <button
+                    onClick={() => setPlaying(v => !v)}
+                    className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 via-emerald-300 to-lime-200 text-black shadow-[0_16px_40px_rgba(52,211,153,0.3)] transition hover:scale-[1.02] active:scale-95"
+                    aria-label={playing ? 'Pause' : 'Play'}
+                >
+                    {playing
+                        ? <Pause className="text-black" size={30} fill="black" />
+                        : <Play className="ml-1 text-black" size={30} fill="black" />
+                    }
+                </button>
+
+                <button
+                    onClick={() => seekToFraction(Math.min(1, played + 10 / Math.max(duration, 1)))}
+                    className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white"
+                    aria-label="+10s"
+                >
+                    <SkipForward size={20} />
+                </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                <button
+                    onClick={() => setMuted(v => !v)}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white"
+                    aria-label={muted ? 'Unmute' : 'Mute'}
+                >
+                    {muted || volume === 0
+                        ? <VolumeX size={20} />
+                        : <Volume2 size={20} />
+                    }
+                </button>
+
+                <div>
+                    <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-white/45">
+                        <span>Volume</span>
+                        <span>{Math.round((muted ? 0 : volume) * 100)}%</span>
+                    </div>
+                    <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step="any"
+                        value={muted ? 0 : volume}
+                        onChange={e => { setVolume(parseFloat(e.target.value)); setMuted(false); }}
+                        className="h-2 w-full cursor-pointer accent-emerald-300"
+                        aria-label="Volume"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+
     // ══════════════════════════════════════════════════════════════════
     // AUDIO LAYOUT
     // ══════════════════════════════════════════════════════════════════
     if (isAudio) {
         return (
             <div
-                className="relative flex flex-col items-center justify-center w-full min-h-screen bg-neutral-950 overflow-hidden select-none"
+                className="relative flex flex-col items-center justify-center w-full min-h-screen overflow-hidden select-none"
                 style={media.thumbnail_url ? {
                     backgroundImage: `url(${media.thumbnail_url})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
-                } : {}}
+                } : {
+                    background: 'radial-gradient(circle at 20% 20%, #2f385e 0%, #0b1022 50%, #06080f 100%)',
+                }}
             >
-                {/* Blur overlay */}
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-2xl" />
+                <div className="absolute inset-0 bg-black/55 backdrop-blur-2xl" />
+                <div className="absolute -top-32 -left-24 w-96 h-96 rounded-full bg-cyan-400/20 blur-3xl" />
+                <div className="absolute -bottom-40 -right-20 w-[26rem] h-[26rem] rounded-full bg-emerald-400/20 blur-3xl" />
+                <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/10 to-transparent" />
 
-                <div className="relative z-10 flex flex-col items-center w-full max-w-sm px-6">
-                    {/* Album art disc */}
-                    <div
-                        className="relative w-56 h-56 rounded-full shadow-2xl overflow-hidden mb-8 border-4 border-white/10"
-                        style={{
-                            animation: playing ? 'spin 8s linear infinite' : 'none',
-                        }}
-                    >
-                        {media.thumbnail_url ? (
-                            <img
-                                src={media.thumbnail_url}
-                                alt={media.title}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
-                                <Music size={72} className="text-neutral-600" strokeWidth={1} />
+                <div className="relative z-10 w-full max-w-5xl px-5 py-8 sm:py-12">
+                    <div className="grid gap-8 rounded-[2rem] border border-white/10 bg-black/35 p-6 shadow-2xl backdrop-blur-xl sm:p-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-center lg:gap-10">
+                        <div className="relative mx-auto w-full max-w-[320px]">
+                            <div className="absolute inset-6 rounded-full bg-emerald-300/20 blur-3xl" />
+                            <div
+                                className="relative aspect-square overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-900 shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
+                                style={{
+                                    transform: playing ? 'rotate(-2deg)' : 'rotate(0deg)',
+                                    transition: 'transform 240ms ease',
+                                }}
+                            >
+                                {media.thumbnail_url ? (
+                                    <img
+                                        src={media.thumbnail_url}
+                                        alt={media.title}
+                                        className="h-full w-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center bg-neutral-800">
+                                        <Music size={96} className="text-neutral-600" strokeWidth={1} />
+                                    </div>
+                                )}
+
+                                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/70 to-transparent" />
+                                <div className="absolute bottom-4 left-4 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-white/70 backdrop-blur-sm">
+                                    Local Audio
+                                </div>
                             </div>
-                        )}
-                        {/* Center hole */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="w-10 h-10 rounded-full bg-neutral-950 border-2 border-white/10" />
                         </div>
-                    </div>
 
-                    {/* Metadata */}
-                    <h1 className="text-white text-2xl font-bold text-center leading-tight mb-1">
-                        {media.title ?? 'Sem título'}
-                    </h1>
-                    {media.artist && (
-                        <p className="text-white/60 text-base text-center mb-0.5">{media.artist}</p>
-                    )}
-                    {media.album && (
-                        <p className="text-white/40 text-sm text-center">{media.album}</p>
-                    )}
+                        <div>
+                            <div className="mb-5 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.22em] text-white/45">
+                                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">Music Player</span>
+                                {media.album && (
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">{media.album}</span>
+                                )}
+                            </div>
 
-                    <div className="mt-8 w-full">
-                        <Controls />
+                            <h1 className="max-w-2xl text-3xl font-semibold leading-tight text-white sm:text-4xl">
+                                {media.title ?? 'Sem título'}
+                            </h1>
+
+                            {media.artist && (
+                                <p className="mt-3 text-lg text-white/70">{media.artist}</p>
+                            )}
+
+                            {media.description && (
+                                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">
+                                    {media.description}
+                                </p>
+                            )}
+
+                            {audioError && (
+                                <p className="mt-4 rounded-2xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                                    {audioError}
+                                </p>
+                            )}
+
+                            <AudioControls />
+                        </div>
                     </div>
                 </div>
 
-                {/* Hidden audio player */}
-                <ReactPlayer
-                    ref={playerRef}
-                    url={url}
-                    playing={playing}
-                    muted={muted}
-                    volume={volume}
-                    width="0" height="0"
-                    onReady={() => setReady(true)}
-                    onDuration={setDuration}
-                    onProgress={onProgress}
+                <audio
+                    ref={audioRef}
+                    src={url}
+                    preload="metadata"
+                    playsInline
+                    onLoadedMetadata={onAudioLoadedMetadata}
+                    onTimeUpdate={onAudioTimeUpdate}
+                    onEnded={() => setPlaying(false)}
+                    onError={() => {
+                        setPlaying(false);
+                        setAudioError('Arquivo de audio indisponivel ou URL invalida.');
+                    }}
                 />
             </div>
         );

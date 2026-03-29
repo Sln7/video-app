@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Media;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
 
 class MediaSeeder extends Seeder
 {
@@ -79,40 +80,58 @@ class MediaSeeder extends Seeder
                 'artist' => 'John Doe',
                 'album'  => 'Sunrise Sessions',
                 'description' => 'Uma faixa tranquila de violão para começar o dia com leveza.',
-                'duration_seconds' => 214,
+                'duration_seconds' => 36,
+                'frequency' => 220,
             ],
             [
                 'title'  => 'Lo-fi Study Beats Vol. 3',
                 'artist' => 'Jane Smith',
                 'album'  => 'Focus Flows',
                 'description' => 'Batidas lo-fi ideais para concentração e estudo profundo.',
-                'duration_seconds' => 182,
+                'duration_seconds' => 42,
+                'frequency' => 247,
             ],
             [
                 'title'  => 'Rainy Day Jazz',
                 'artist' => 'Miles Apart',
                 'album'  => 'Cozy Corner',
                 'description' => 'Jazz suave com influências do cool jazz dos anos 50 para dias chuvosos.',
-                'duration_seconds' => 267,
+                'duration_seconds' => 48,
+                'frequency' => 262,
             ],
             [
                 'title'  => 'Electronic Pulse',
                 'artist' => 'Synth Wave',
                 'album'  => 'Digital Dreams',
                 'description' => 'Synthwave eletrônico com texturas noturnas e batidas envolventes.',
-                'duration_seconds' => 198,
-            ],
-            [
-                'title'  => 'Sertão em Chamas',
-                'artist' => 'Trio Nordestino',
-                'album'  => 'Raízes do Brasil',
-                'description' => 'Forró pé-de-serra autêntico com sanfona, triângulo e zabumba.',
-                'duration_seconds' => 233,
+                'duration_seconds' => 44,
+                'frequency' => 294,
             ],
         ];
 
-        foreach ($audioTracks as $track) {
-            Media::factory()->localAudio()->create($track);
+        foreach ($audioTracks as $index => $track) {
+            $audioPath = sprintf('music/seed-track-%02d.wav', $index + 1);
+            $thumbnailPath = sprintf('thumbnails/seed-track-%02d.svg', $index + 1);
+
+            Storage::disk('public')->put(
+                $audioPath,
+                $this->generateWaveAudio($track['duration_seconds'], $track['frequency'])
+            );
+
+            Storage::disk('public')->put(
+                $thumbnailPath,
+                $this->generateArtworkSvg($track['title'], $track['artist'])
+            );
+
+            Media::factory()->localAudio()->create([
+                'title'            => $track['title'],
+                'artist'           => $track['artist'],
+                'album'            => $track['album'],
+                'description'      => $track['description'],
+                'duration_seconds' => $track['duration_seconds'],
+                'video_path'       => $audioPath,
+                'thumbnail_url'    => Storage::disk('public')->url($thumbnailPath),
+            ]);
         }
 
         // ── Favoritos aleatórios ─────────────────────────────────────────
@@ -127,4 +146,71 @@ class MediaSeeder extends Seeder
             });
         }
     }
+
+        private function generateWaveAudio(int $durationSeconds, int $frequency): string
+        {
+                $sampleRate = 16000;
+                $channels = 1;
+                $bitsPerSample = 16;
+                $amplitude = 11000;
+                $totalSamples = $sampleRate * max(1, $durationSeconds);
+                $byteRate = $sampleRate * $channels * ($bitsPerSample / 8);
+                $blockAlign = $channels * ($bitsPerSample / 8);
+                $pcmData = '';
+
+                for ($sample = 0; $sample < $totalSamples; $sample++) {
+                        $time = $sample / $sampleRate;
+                        $tone = sin(2 * M_PI * $frequency * $time)
+                                + (0.35 * sin(2 * M_PI * ($frequency / 2) * $time))
+                                + (0.15 * sin(2 * M_PI * ($frequency * 1.5) * $time));
+
+                        $value = (int) round(($amplitude / 1.5) * $tone);
+                        $pcmData .= pack('v', $value < 0 ? $value + 65536 : $value);
+                }
+
+                $dataSize = strlen($pcmData);
+                $riffSize = 36 + $dataSize;
+
+                return 'RIFF'
+                        . pack('V', $riffSize)
+                        . 'WAVE'
+                        . 'fmt '
+                        . pack('V', 16)
+                        . pack('v', 1)
+                        . pack('v', $channels)
+                        . pack('V', $sampleRate)
+                        . pack('V', $byteRate)
+                        . pack('v', $blockAlign)
+                        . pack('v', $bitsPerSample)
+                        . 'data'
+                        . pack('V', $dataSize)
+                        . $pcmData;
+        }
+
+        private function generateArtworkSvg(string $title, string $artist): string
+        {
+                $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+                $safeArtist = htmlspecialchars($artist, ENT_QUOTES, 'UTF-8');
+
+                return <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" fill="none">
+    <defs>
+        <linearGradient id="cover" x1="100" y1="120" x2="1040" y2="1100" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#67E8F9"/>
+            <stop offset="0.5" stop-color="#34D399"/>
+            <stop offset="1" stop-color="#0F172A"/>
+        </linearGradient>
+    </defs>
+    <rect width="1200" height="1200" rx="80" fill="#020617"/>
+    <rect x="60" y="60" width="1080" height="1080" rx="64" fill="url(#cover)" opacity="0.9"/>
+    <circle cx="600" cy="460" r="250" fill="#020617" fill-opacity="0.24"/>
+    <circle cx="600" cy="460" r="210" stroke="white" stroke-opacity="0.35" stroke-width="2"/>
+    <circle cx="600" cy="460" r="110" stroke="white" stroke-opacity="0.2" stroke-width="20"/>
+    <circle cx="600" cy="460" r="26" fill="white" fill-opacity="0.8"/>
+    <text x="110" y="900" fill="white" font-family="Verdana, sans-serif" font-size="74" font-weight="700">{$safeTitle}</text>
+    <text x="110" y="980" fill="#E2E8F0" font-family="Verdana, sans-serif" font-size="42">{$safeArtist}</text>
+    <text x="110" y="1060" fill="#CBD5E1" font-family="Verdana, sans-serif" font-size="28">Seeded local audio preview</text>
+</svg>
+SVG;
+        }
 }
