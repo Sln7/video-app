@@ -89,9 +89,9 @@ export default function MediaListPage() {
                             >
                                 {/* Thumbnail */}
                                 <div className="relative aspect-square bg-neutral-800 flex items-center justify-center overflow-hidden">
-                                    {item.thumbnail ? (
+                                    {item.thumbnail_url ? (
                                         <img
-                                            src={item.thumbnail}
+                                            src={item.thumbnail_url}
                                             alt={item.title}
                                             className="w-full h-full object-cover"
                                         />
