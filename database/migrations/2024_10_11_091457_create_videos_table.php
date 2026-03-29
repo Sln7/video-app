@@ -6,15 +6,13 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('videos', function (Blueprint $table) {
+        Schema::create('media', function (Blueprint $table) {
             $table->id();
             $table->uuid('public_id')->unique();
             $table->string('title');
+            $table->enum('media_type', ['audio', 'video'])->default('video');
             $table->text('description')->nullable();
             $table->string('embed_url')->nullable();
             $table->string('video_id')->unique()->nullable();
@@ -24,17 +22,17 @@ return new class extends Migration
             $table->integer('views')->default(0);
             $table->integer('likes')->default(0);
             $table->boolean('processed')->default(false);
-            $table->enum('source', ['youtube', 'hls']);
+            $table->enum('source', ['youtube', 'hls', 'local_audio', 'soundcloud']);
+            $table->string('artist')->nullable();
+            $table->string('album')->nullable();
+            $table->integer('duration_seconds')->default(0);
             $table->softDeletes();
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('videos');
+        Schema::dropIfExists('media');
     }
 };

@@ -10,4 +10,15 @@ export default defineConfig({
         }),
         react(),
     ],
+    server: {
+        host: '0.0.0.0',
+        hmr: {
+            host: 'localhost',
+            protocol: 'wss',
+            port: 443,
+            // Faz o laravel-vite-plugin escrever https://localhost:443 no hot file,
+            // então o @vite do Blade gera URLs que passam pelo Caddy (não pela 5173 direta).
+            clientPort: 443,
+        },
+    },
 });

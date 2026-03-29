@@ -8,13 +8,13 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/media', [MediaController::class, 'index']);
+Route::get('/media/{id}', [MediaController::class, 'show']);
 
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::prefix('media')->controller(MediaController::class)->group(function () {
         Route::post('/', 'store');
-        Route::get('/{id}', 'show');
         Route::patch('/{id}/favorite', 'toggleFavorite');
     });
 });

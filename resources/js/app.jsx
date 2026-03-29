@@ -1,12 +1,30 @@
 import './bootstrap';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import UniversalPlayer from './components/UniversalPlayer';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/LoginPage';
+import MediaListPage from './pages/MediaListPage';
+import UploadPage from './pages/UploadPage';
+import PlayerPage from './pages/PlayerPage';
 
-const el = document.getElementById('root');
-
-if (el) {
-    // Bootstrap with media data injected from Blade into the root element
-    const media = JSON.parse(el.dataset.media ?? 'null');
-    createRoot(el).render(<UniversalPlayer media={media} />);
+function ProtectedRoute({ children }) {
+    return localStorage.getItem('token')
+        ? children
+        : <Navigate to="/login" replace />;
 }
+
+function App() {
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route path="/login"       element={<LoginPage />} />
+                <Route path="/player/:id"  element={<PlayerPage />} />
+                <Route path="/"            element={<ProtectedRoute><MediaListPage /></ProtectedRoute>} />
+                <Route path="/upload"      element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
+                <Route path="*"            element={<Navigate to="/" replace />} />
+            </Routes>
+        </BrowserRouter>
+    );
+}
+
+createRoot(document.getElementById('root')).render(<App />);

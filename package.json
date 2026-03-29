@@ -15,6 +15,7 @@
         "lucide-react": "^0.400.0",
         "react": "^19.0",
         "react-dom": "^19.0",
-        "react-player": "^2.16"
+        "react-player": "^2.16",
+        "react-router-dom": "^7.0"
     }
 }

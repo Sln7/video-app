@@ -6,28 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('video_likes', function (Blueprint $table) {
+        Schema::create('media_favorites', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('video_id');
+            $table->unsignedBigInteger('media_id');
             $table->unsignedBigInteger('user_id');
 
-            $table->unique(['video_id', 'user_id']);
+            $table->unique(['media_id', 'user_id']);
 
-            $table->foreign('video_id')->references('id')->on('videos')->onDelete('cascade');
+            $table->foreign('media_id')->references('id')->on('media')->onDelete('cascade');
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('videos');
+        Schema::dropIfExists('media_favorites');
     }
 };
