@@ -74,11 +74,9 @@ export default function UniversalPlayer({ media }) {
     const [fullscreen, setFullscreen] = useState(false);
 
     const playerRef   = useRef(null);
-    const audioRef = useRef(null);
-    const audioProgressRef = useRef(null);
     const containerRef = useRef(null);
     const hideTimer   = useRef(null);
-    const pendingSeekRef = useRef(0);
+    const pendingSeekSecondsRef = useRef(0);
     const [audioError, setAudioError] = useState('');
 
     const isAudio = media?.media_type === 'audio';
@@ -87,38 +85,21 @@ export default function UniversalPlayer({ media }) {
     const url = isYT ? normalizeYouTubeEmbedUrl(resolvedUrl) : resolvedUrl;
 
     function seekToSeconds(seconds) {
-        if (isAudio) {
-            if (!audioRef.current || !duration) return;
-            const clamped = Math.max(0, Math.min(duration, seconds));
-            audioRef.current.currentTime = clamped;
-            return;
+        const clamped = Math.max(0, Math.min(duration || 0, seconds));
+
+        if (isAudio && duration) {
+            setPlayed(clamped / duration);
         }
-        playerRef.current?.seekTo(seconds, 'seconds');
+
+        playerRef.current?.seekTo(clamped, 'seconds');
     }
 
     function seekToFraction(fraction) {
+        const clamped = Math.max(0, Math.min(1, fraction));
         if (isAudio) {
-            if (!audioRef.current || !duration) return;
-            const clamped = Math.max(0, Math.min(1, fraction));
-            audioRef.current.currentTime = clamped * duration;
             setPlayed(clamped);
-            return;
         }
         playerRef.current?.seekTo(fraction, 'fraction');
-    }
-
-    function seekAudioFromPointer(clientX) {
-        if (!isAudio || !audioProgressRef.current) return;
-
-        const rect = audioProgressRef.current.getBoundingClientRect();
-        if (!rect.width) return;
-
-        const fraction = (clientX - rect.left) / rect.width;
-        const clamped = Math.max(0, Math.min(1, fraction));
-
-        pendingSeekRef.current = clamped;
-        setPlayed(clamped);
-        seekToFraction(clamped);
     }
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────
@@ -135,21 +116,9 @@ export default function UniversalPlayer({ media }) {
     }, [played, duration, isAudio]);
 
     useEffect(() => {
-        if (!isAudio || !audioRef.current) return;
-
-        const audio = audioRef.current;
-        audio.volume = volume;
-        audio.muted = muted;
-
-        if (playing) {
-            audio.play().catch(() => {
-                setPlaying(false);
-                setAudioError('Nao foi possivel reproduzir este audio.');
-            });
-        } else {
-            audio.pause();
-        }
-    }, [playing, isAudio, volume, muted]);
+        if (!isAudio) return;
+        setAudioError('');
+    }, [url, isAudio]);
 
     // ── Auto-hide controls for video ───────────────────────────────────
     const resetHideTimer = useCallback(() => {
@@ -195,33 +164,41 @@ export default function UniversalPlayer({ media }) {
     // ── Progress bar interaction ───────────────────────────────────────
     function onSeekChange(e) {
         const nextValue = parseFloat(e.target.value);
-        pendingSeekRef.current = nextValue;
-        setPlayed(nextValue);
+        if (!duration) return;
+
+        pendingSeekSecondsRef.current = nextValue;
+        setPlayed(nextValue / duration);
 
         if (isAudio) {
-            seekToFraction(nextValue);
+            seekToSeconds(nextValue);
+            return;
         }
+
+        seekToFraction(nextValue);
     }
     function onSeekMouseDown() { setSeeking(true); }
     function onSeekMouseUp() {
         setSeeking(false);
-        seekToFraction(pendingSeekRef.current);
+        if (isAudio) {
+            return;
+        }
+
+        seekToFraction(pendingSeekSecondsRef.current);
     }
     function onProgress(state) {
-        if (!seeking) setPlayed(state.played);
+        if (seeking) return;
+
+        if (isAudio && state.playedSeconds != null && duration) {
+            setPlayed(state.playedSeconds / duration);
+            return;
+        }
+
+        setPlayed(state.played);
     }
 
-    function onAudioTimeUpdate() {
-        if (!audioRef.current || seeking || !duration) return;
-        setPlayed(audioRef.current.currentTime / duration);
-    }
-
-    function onAudioLoadedMetadata() {
-        if (!audioRef.current) return;
-        setDuration(audioRef.current.duration || 0);
+    function onPlayerReady() {
         setReady(true);
         setAudioError('');
-        pendingSeekRef.current = 0;
     }
 
     // ── Shared controls bar ────────────────────────────────────────────
@@ -341,26 +318,32 @@ export default function UniversalPlayer({ media }) {
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 shadow-lg shadow-black/20">
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.24em] text-white/45">
                     <span>Agora tocando</span>
-                    <span>{Math.round(played * 100)}%</span>
+                    <span>{formatTime(played * duration)} / {formatTime(duration)}</span>
                 </div>
 
                 <div className="mt-4 flex items-center gap-3">
                     <span className="w-11 text-right text-sm tabular-nums text-white/75">
                         {formatTime(played * duration)}
                     </span>
-                    <div
-                        ref={audioProgressRef}
-                        className="relative flex-1 cursor-pointer py-3"
-                        onPointerDown={event => seekAudioFromPointer(event.clientX)}
-                    >
-                        <div className="h-2 rounded-full bg-white/10" />
+                    <div className="relative flex-1">
+                        <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/10" />
                         <div
-                            className="absolute left-0 top-0 h-2 rounded-full bg-gradient-to-r from-cyan-300 via-emerald-300 to-lime-200"
-                            style={{ top: '0.75rem', width: `${played * 100}%` }}
+                            className="pointer-events-none absolute left-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-cyan-300 via-emerald-300 to-lime-200"
+                            style={{ width: `${played * 100}%` }}
                         />
-                        <div
-                            className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-white/30 bg-white shadow-[0_0_0_6px_rgba(255,255,255,0.08)]"
-                            style={{ left: `calc(${played * 100}% - 0.5rem)` }}
+                        <input
+                            type="range"
+                            min={0}
+                            max={duration || 0}
+                            step="0.1"
+                            value={duration ? played * duration : 0}
+                            onMouseDown={onSeekMouseDown}
+                            onMouseUp={onSeekMouseUp}
+                            onTouchStart={onSeekMouseDown}
+                            onTouchEnd={onSeekMouseUp}
+                            onChange={onSeekChange}
+                            className="relative z-10 h-8 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:mt-[-4px] [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-white/30 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_0_6px_rgba(255,255,255,0.08)]"
+                            aria-label="Seek audio"
                         />
                     </div>
                     <span className="w-11 text-sm tabular-nums text-white/55">
@@ -380,6 +363,7 @@ export default function UniversalPlayer({ media }) {
 
                 <button
                     onClick={() => setPlaying(v => !v)}
+                    disabled={!ready}
                     className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 via-emerald-300 to-lime-200 text-black shadow-[0_16px_40px_rgba(52,211,153,0.3)] transition hover:scale-[1.02] active:scale-95"
                     aria-label={playing ? 'Pause' : 'Play'}
                 >
@@ -390,7 +374,7 @@ export default function UniversalPlayer({ media }) {
                 </button>
 
                 <button
-                    onClick={() => seekToFraction(Math.min(1, played + 10 / Math.max(duration, 1)))}
+                    onClick={() => seekToSeconds(Math.min(duration || 0, played * duration + 10))}
                     className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white"
                     aria-label="+10s"
                 >
@@ -513,17 +497,27 @@ export default function UniversalPlayer({ media }) {
                     </div>
                 </div>
 
-                <audio
-                    ref={audioRef}
-                    src={url}
-                    preload="metadata"
-                    playsInline
-                    onLoadedMetadata={onAudioLoadedMetadata}
-                    onTimeUpdate={onAudioTimeUpdate}
+                <ReactPlayer
+                    ref={playerRef}
+                    url={url}
+                    playing={playing}
+                    muted={muted}
+                    volume={volume}
+                    width="0"
+                    height="0"
+                    onReady={onPlayerReady}
+                    onDuration={setDuration}
+                    onProgress={onProgress}
                     onEnded={() => setPlaying(false)}
                     onError={() => {
                         setPlaying(false);
                         setAudioError('Arquivo de audio indisponivel ou URL invalida.');
+                    }}
+                    config={{
+                        file: {
+                            forceAudio: true,
+                            attributes: { preload: 'metadata' },
+                        },
                     }}
                 />
             </div>

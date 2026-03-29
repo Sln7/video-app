@@ -21,4 +21,9 @@ export default defineConfig({
             clientPort: 443,
         },
     },
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        setupFiles: ['./resources/js/test/setup.js'],
+    },
 });
