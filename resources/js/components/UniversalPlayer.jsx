@@ -13,6 +13,48 @@ function resolveUrl(media) {
     return null;
 }
 
+function normalizeYouTubeEmbedUrl(rawUrl) {
+    if (!rawUrl) return rawUrl;
+
+    try {
+        const url = new URL(rawUrl);
+        if (!url.hostname.includes('youtube.com') && !url.hostname.includes('youtu.be')) return rawUrl;
+
+        let videoId = '';
+
+        if (url.hostname.includes('youtu.be')) {
+            videoId = url.pathname.replace('/', '');
+        } else {
+            const pathParts = url.pathname.split('/').filter(Boolean);
+            const embedIndex = pathParts.indexOf('embed');
+            if (embedIndex >= 0 && pathParts[embedIndex + 1]) {
+                videoId = pathParts[embedIndex + 1];
+            } else {
+                videoId = url.searchParams.get('v') || '';
+            }
+        }
+
+        if (!videoId) return rawUrl;
+
+        const safeUrl = new URL(`https://www.youtube-nocookie.com/embed/${videoId}`);
+
+        // Reduce distractions and recommendations for child-focused viewing.
+        safeUrl.searchParams.set('controls', '1');
+        safeUrl.searchParams.set('rel', '0');
+        safeUrl.searchParams.set('modestbranding', '1');
+        safeUrl.searchParams.set('playsinline', '1');
+        safeUrl.searchParams.set('iv_load_policy', '3');
+        safeUrl.searchParams.set('fs', '0');
+        safeUrl.searchParams.set('disablekb', '1');
+        safeUrl.searchParams.delete('enablejsapi');
+        safeUrl.searchParams.delete('origin');
+
+        return safeUrl.toString();
+    } catch {
+        return rawUrl;
+    }
+}
+
 function formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return '0:00';
     const m = Math.floor(seconds / 60);
@@ -35,9 +77,10 @@ export default function UniversalPlayer({ media }) {
     const containerRef = useRef(null);
     const hideTimer   = useRef(null);
 
-    const url     = resolveUrl(media);
     const isAudio = media?.media_type === 'audio';
     const isYT    = media?.source === 'youtube';
+    const resolvedUrl = resolveUrl(media);
+    const url = isYT ? normalizeYouTubeEmbedUrl(resolvedUrl) : resolvedUrl;
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────
     useEffect(() => {
@@ -305,37 +348,52 @@ export default function UniversalPlayer({ media }) {
             <div
                 className="relative w-full"
                 style={{ maxHeight: '100vh', aspectRatio: '16/9' }}
-                onClick={() => setPlaying(v => !v)}
+                onClick={() => {
+                    if (!isYT) setPlaying(v => !v);
+                }}
             >
-                <ReactPlayer
-                    ref={playerRef}
-                    url={url}
-                    playing={playing}
-                    muted={muted}
-                    volume={volume}
-                    width="100%"
-                    height="100%"
-                    onReady={() => setReady(true)}
-                    onDuration={setDuration}
-                    onProgress={onProgress}
-                    config={{
-                        file: {
-                            forceHLS: Boolean(media.hls_url),
-                            attributes: { playsInline: true },
-                        },
-                    }}
-                />
+                {isYT ? (
+                    <iframe
+                        src={url}
+                        title={media.title ?? 'YouTube player'}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                    />
+                ) : (
+                    <>
+                        <ReactPlayer
+                            ref={playerRef}
+                            url={url}
+                            playing={playing}
+                            muted={muted}
+                            volume={volume}
+                            width="100%"
+                            height="100%"
+                            onReady={() => setReady(true)}
+                            onDuration={setDuration}
+                            onProgress={onProgress}
+                            config={{
+                                file: {
+                                    forceHLS: Boolean(media.hls_url),
+                                    attributes: { playsInline: true },
+                                },
+                            }}
+                        />
 
-                {/* Overlay controls */}
-                <Controls overlay />
+                        {/* Overlay controls */}
+                        <Controls overlay />
 
-                {/* Big play icon on pause */}
-                {!playing && ready && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-20 h-20 rounded-full bg-black/50 flex items-center justify-center">
-                            <Play size={40} fill="white" className="text-white ml-1" />
-                        </div>
-                    </div>
+                        {/* Big play icon on pause */}
+                        {!playing && ready && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-20 h-20 rounded-full bg-black/50 flex items-center justify-center">
+                                    <Play size={40} fill="white" className="text-white ml-1" />
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 
