@@ -6,12 +6,16 @@
 
 localhost {
     # ── Vite HMR (WebSocket) ─────────────────────────────────────────────
-    # Upgrade de conexões WebSocket para o servidor de dev do Vite.
-    @vite_ws {
+    @vite_hmr {
+        path /vite-hmr
         header Connection *Upgrade*
-        header Upgrade    websocket
+        header Upgrade websocket
     }
-    reverse_proxy @vite_ws laravel.test:5173
+    reverse_proxy @vite_hmr laravel.test:5173 {
+        transport http {
+            versions 1.1
+        }
+    }
 
     # ── Vite assets (JS, CSS, HMR) ───────────────────────────────────────
     @vite path_regexp ^/(@vite|@id|@fs|@react-refresh|resources|node_modules)
