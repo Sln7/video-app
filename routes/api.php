@@ -13,6 +13,9 @@ Route::post('/consumer/login', [AuthController::class, 'loginConsumer']);
 Route::get('/media', [MediaController::class, 'index']);
 Route::get('/media/{id}', [MediaController::class, 'show']);
 
+// Public shared playlist (no auth required)
+Route::get('/shared/playlist/{shareToken}', [PlaylistController::class, 'showShared']);
+
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -29,5 +32,7 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/{publicId}', 'destroy');
         Route::post('/{publicId}/media/{mediaPublicId}', 'attachMedia');
         Route::delete('/{publicId}/media/{mediaPublicId}', 'detachMedia');
+        Route::post('/{publicId}/share', 'share');
+        Route::delete('/{publicId}/share', 'unshare');
     });
 });

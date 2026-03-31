@@ -10,12 +10,11 @@ class MediaCollection extends ResourceCollection
     public function toArray($request): array
     {
         return $this->collection->map(fn ($media) => [
-            'id'         => $media->id,
-            'public_id'  => $media->public_id,
-            'title'      => $media->title,
-            'media_type' => $media->media_type,
-            'artist'     => $media->artist,
-            'thumbnail'  => $this->resolveThumbnail($media),
+            'public_id'     => $media->public_id,
+            'title'         => $media->title,
+            'media_type'    => $media->media_type,
+            'artist'        => $media->artist,
+            'thumbnail_url' => $this->resolveThumbnail($media),
         ])->toArray();
     }
 

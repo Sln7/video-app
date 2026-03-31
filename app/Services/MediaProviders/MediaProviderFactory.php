@@ -18,7 +18,7 @@ class MediaProviderFactory
      *
      * @throws MediaProviderNotFoundException
      */
-    public static function create(string $provider): MediaProviderInterface
+    public function create(string $provider): MediaProviderInterface
     {
         return match ($provider) {
             'youtube'     => new YouTubeService(),

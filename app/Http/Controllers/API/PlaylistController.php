@@ -30,6 +30,7 @@ class PlaylistController extends Controller
             'user_id' => $request->user()->id,
             'name' => $request->validated('name'),
             'description' => $request->validated('description'),
+            'is_public' => $request->validated('is_public', false),
         ]);
 
         return response()->json([
@@ -91,6 +92,43 @@ class PlaylistController extends Controller
             'message' => 'Media removed from playlist.',
             'data' => new PlaylistResource($playlist->load(['media'])->loadCount('media')),
         ]);
+    }
+
+    public function share(Request $request, string $publicId): JsonResponse
+    {
+        $playlist = $this->findOwnedPlaylist($request->user()->id, $publicId);
+
+        $token = $playlist->generateShareToken();
+
+        return response()->json([
+            'message' => 'Playlist shared successfully.',
+            'data' => new PlaylistResource($playlist->loadCount('media')),
+            'share_url' => url("/shared/playlist/{$token}"),
+        ]);
+    }
+
+    public function unshare(Request $request, string $publicId): JsonResponse
+    {
+        $playlist = $this->findOwnedPlaylist($request->user()->id, $publicId);
+
+        $playlist->revokeShareToken();
+
+        return response()->json([
+            'message' => 'Playlist sharing revoked.',
+            'data' => new PlaylistResource($playlist->loadCount('media')),
+        ]);
+    }
+
+    public function showShared(string $shareToken): PlaylistResource
+    {
+        $playlist = Playlist::query()
+            ->where('share_token', $shareToken)
+            ->where('is_public', true)
+            ->with('media')
+            ->withCount('media')
+            ->firstOrFail();
+
+        return new PlaylistResource($playlist->load('user'));
     }
 
     private function findOwnedPlaylist(int $userId, string $publicId, bool $withMedia = false): Playlist

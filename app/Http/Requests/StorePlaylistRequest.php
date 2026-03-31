@@ -16,6 +16,7 @@ class StorePlaylistRequest extends FormRequest
         return [
             'name' => 'required|string|max:120',
             'description' => 'nullable|string|max:1000',
+            'is_public' => 'nullable|boolean',
         ];
     }
 }

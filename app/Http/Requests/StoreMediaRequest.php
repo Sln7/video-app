@@ -17,7 +17,7 @@ class StoreMediaRequest extends FormRequest
             'title'       => 'required_unless:source,youtube|string|max:255',
             'description' => 'nullable|string',
             'media_type'  => 'required|in:audio,video',
-            'source'      => 'required|in:youtube,hls,local_audio,soundcloud',
+            'source'      => 'required|in:youtube,hls,local_audio',
             'video_id'    => 'required_if:source,youtube|string|unique:media,video_id',
             'thumbnail'   => 'nullable|mimes:jpeg,jpg,png|max:2000',
         ];
@@ -40,7 +40,7 @@ class StoreMediaRequest extends FormRequest
             'media_type.required'    => 'Media type (audio or video) is required.',
             'media_type.in'          => 'Media type must be audio or video.',
             'source.required'        => 'Source is required.',
-            'source.in'              => 'Source must be youtube, hls, local_audio, or soundcloud.',
+            'source.in'              => 'Source must be youtube, hls, or local_audio.',
             'video_id.required_if'   => 'YouTube video ID is required when source is youtube.',
             'video_id.unique'        => 'This media has already been added.',
             'file.required'          => 'A media file is required for this source type.',

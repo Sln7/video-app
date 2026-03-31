@@ -93,9 +93,13 @@ class MediaController extends Controller
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            Log::error($e);
+            Log::error('Media creation failed', [
+                'source' => $request->input('source'),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
-            return response()->json(['message' => 'Error creating media.'], 500);
+            return response()->json(['message' => 'Error creating media: ' . $e->getMessage()], 500);
         }
     }
 

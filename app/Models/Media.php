@@ -43,23 +43,21 @@ class Media extends Model
         return $this->favorites()->count();
     }
 
-    public function scopeFilter($query, array $filters): void
+    public function scopeFilter($query, array $filters)
     {
-        $query->when($filters['processed'] ?? null, function ($query, $processed) {
+        return $query->when($filters['processed'] ?? null, function ($query, $processed) {
             $query->where('processed', $processed);
         }, function ($query) {
             $query->where('processed', true);
-        });
-
-        $query->when($filters['search'] ?? null, function ($query, $search) {
+        })
+        ->when($filters['search'] ?? null, function ($query, $search) {
             $query->where(function ($query) use ($search) {
                 $query->where('title', 'like', '%'.$search.'%')
                     ->orWhere('description', 'like', '%'.$search.'%')
                     ->orWhere('artist', 'like', '%'.$search.'%');
             });
-        });
-
-        $query->when($filters['media_type'] ?? null, function ($query, $mediaType) {
+        })
+        ->when($filters['media_type'] ?? null, function ($query, $mediaType) {
             $query->where('media_type', $mediaType);
         });
     }

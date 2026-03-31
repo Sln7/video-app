@@ -84,23 +84,17 @@ export default function UniversalPlayer({ media }) {
     const resolvedUrl = resolveUrl(media);
     const url = isYT ? normalizeYouTubeEmbedUrl(resolvedUrl) : resolvedUrl;
 
-    function seekToSeconds(seconds) {
+    const seekToSeconds = useCallback((seconds) => {
         const clamped = Math.max(0, Math.min(duration || 0, seconds));
-
-        if (isAudio && duration) {
-            setPlayed(clamped / duration);
-        }
-
+        setPlayed(duration ? clamped / duration : 0);
         playerRef.current?.seekTo(clamped, 'seconds');
-    }
+    }, [duration]);
 
-    function seekToFraction(fraction) {
+    const seekToFraction = useCallback((fraction) => {
         const clamped = Math.max(0, Math.min(1, fraction));
-        if (isAudio) {
-            setPlayed(clamped);
-        }
-        playerRef.current?.seekTo(fraction, 'fraction');
-    }
+        setPlayed(clamped);
+        playerRef.current?.seekTo(clamped, 'fraction');
+    }, []);
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────
     useEffect(() => {
@@ -113,7 +107,7 @@ export default function UniversalPlayer({ media }) {
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [played, duration, isAudio]);
+    }, [played, duration, seekToSeconds]);
 
     useEffect(() => {
         if (!isAudio) return;
@@ -166,34 +160,34 @@ export default function UniversalPlayer({ media }) {
         const nextValue = parseFloat(e.target.value);
         if (!duration) return;
 
-        pendingSeekSecondsRef.current = nextValue;
-        setPlayed(nextValue / duration);
-
         if (isAudio) {
+            // Audio slider value is in seconds
+            pendingSeekSecondsRef.current = nextValue;
+            setPlayed(nextValue / duration);
             seekToSeconds(nextValue);
-            return;
+        } else {
+            // Video slider value is 0–1 fraction
+            pendingSeekSecondsRef.current = nextValue;
+            setPlayed(nextValue);
+            seekToFraction(nextValue);
         }
-
-        seekToFraction(nextValue);
     }
     function onSeekMouseDown() { setSeeking(true); }
     function onSeekMouseUp() {
         setSeeking(false);
         if (isAudio) {
-            return;
+            seekToSeconds(pendingSeekSecondsRef.current);
+        } else {
+            seekToFraction(pendingSeekSecondsRef.current);
         }
-
-        seekToFraction(pendingSeekSecondsRef.current);
     }
     function onProgress(state) {
         if (seeking) return;
-
-        if (isAudio && state.playedSeconds != null && duration) {
+        if (state.playedSeconds != null && duration) {
             setPlayed(state.playedSeconds / duration);
-            return;
+        } else {
+            setPlayed(state.played);
         }
-
-        setPlayed(state.played);
     }
 
     function onPlayerReady() {
@@ -288,7 +282,7 @@ export default function UniversalPlayer({ media }) {
 
                     {!isYT && (
                         <button
-                            onClick={() => seekToFraction(Math.min(1, played + 10 / duration))}
+                            onClick={() => seekToSeconds(Math.min(duration || 0, played * duration + 10))}
                             className="text-white/70 hover:text-white transition-colors"
                             aria-label="+10s"
                         >
@@ -516,7 +510,7 @@ export default function UniversalPlayer({ media }) {
                     config={{
                         file: {
                             forceAudio: true,
-                            attributes: { preload: 'metadata' },
+                            attributes: { preload: 'auto' },
                         },
                     }}
                 />
