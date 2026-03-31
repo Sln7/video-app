@@ -19,8 +19,36 @@ localhost {
 
     # ── Vite assets (JS, CSS, HMR) ───────────────────────────────────────
     @vite path_regexp ^/(@vite|@id|@fs|@react-refresh|resources|node_modules)
-    reverse_proxy @vite laravel.test:5173
+    reverse_proxy @vite laravel.test:5173 {
+        header_up Host localhost
+    }
 
-    # ── Laravel app ──────────────────────────────────────────────────────
-    reverse_proxy laravel.test:80
+    # ── Static assets and API responses ──────────────────────────────────
+    @static {
+        path /build/* /storage/* /api/*
+    }
+    handle @static {
+        reverse_proxy laravel.test:80 {
+            header_up Host {http.request.host}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-For {http.request.remote}
+        }
+        header Access-Control-Allow-Origin *
+        header Access-Control-Allow-Methods "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Request-Id, X-Guest-Id"
+        header Access-Control-Expose-Headers "X-Request-Id, X-Guest-Id"
+        header Cache-Control "public, max-age=31536000, immutable" @isCachebusted
+        header Cache-Control "no-cache, must-revalidate" !@isCachebusted
+    }
+
+    @isCachebusted {
+        path_regexp assets /build/assets/
+    }
+
+    # ── Laravel app (catch-all) ──────────────────────────────────────────
+    reverse_proxy laravel.test:80 {
+        header_up Host {http.request.host}
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-For {http.request.remote}
+    }
 }

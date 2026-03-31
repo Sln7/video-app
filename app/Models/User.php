@@ -11,10 +11,17 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    public const ROLE_CONSUMER = 'consumer';
+
+    public const ROLE_UPLOADER = 'uploader';
+
+    public const ROLE_ADMIN = 'admin';
+
     protected $fillable = [
         'name',
         'email',
         'password',
+        'role',
     ];
 
     protected $hidden = [
@@ -28,5 +35,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function canUploadMedia(): bool
+    {
+        return in_array($this->role, [self::ROLE_UPLOADER, self::ROLE_ADMIN], true) || $this->role === null;
+    }
+
+    public function playlists()
+    {
+        return $this->hasMany(Playlist::class);
     }
 }

@@ -12,8 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->trustProxies(at: '*');
+
+        $middleware->alias([
+            'can.upload.media' => \App\Http\Middleware\EnsureCanUploadMedia::class,
+        ]);
+
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ], append: [
+            \App\Http\Middleware\TrackApiActivity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
