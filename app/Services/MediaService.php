@@ -5,14 +5,18 @@ namespace App\Services;
 use App\Jobs\ConvertToHLSJob;
 use App\Models\Media;
 use App\Services\MediaProviders\MediaProviderFactory;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 
 class MediaService
 {
     public function __construct(
         private MediaProviderFactory $providerFactory,
-        private UploadService $uploadService
+        private UploadService $uploadService,
+        private AudioMetadataService $audioMetadataService
     ) {}
 
     public function getByPublicId(string $publicId): Media
@@ -30,6 +34,7 @@ class MediaService
             'youtube'     => $this->createFromYouTube($data),
             'hls'         => $this->createHLS($data, $request),
             'local_audio' => $this->createLocalAudio($data, $request),
+            'video_to_audio' => $this->createMusicFromVideo($data, $request),
             default       => throw new \InvalidArgumentException("Invalid media source: {$data['source']}"),
         };
     }
@@ -88,6 +93,73 @@ class MediaService
         $media->album            = $mediaData['album'];
         $media->duration_seconds = $mediaData['duration_seconds'];
         $media->processed        = true;
+        $media->save();
+
+        return $media;
+    }
+
+    private function createMusicFromVideo(array $data, Request $request): Media
+    {
+        /** @var UploadedFile|null $videoFile */
+        $videoFile = $request->file('file');
+
+        if (! $videoFile) {
+            throw new \InvalidArgumentException('A video file is required to extract audio.');
+        }
+
+        $tempVideoPath = $videoFile->store('temp_videos', 'local');
+        $localVideoPath = Storage::disk('local')->path($tempVideoPath);
+
+        $musicFileName = Str::uuid().'.mp3';
+        $musicRelativePath = 'music/'.$musicFileName;
+        $musicAbsolutePath = Storage::disk('public')->path($musicRelativePath);
+
+        $musicDirectory = dirname($musicAbsolutePath);
+        if (! is_dir($musicDirectory)) {
+            mkdir($musicDirectory, 0755, true);
+        }
+
+        $process = new Process([
+            config('services.ffmpeg.path', 'ffmpeg'),
+            '-y',
+            '-i', $localVideoPath,
+            '-vn',
+            '-acodec', 'libmp3lame',
+            '-q:a', '2',
+            $musicAbsolutePath,
+        ]);
+        $process->setTimeout(300);
+        $process->run();
+
+        Storage::disk('local')->delete($tempVideoPath);
+
+        if (! $process->isSuccessful() || ! file_exists($musicAbsolutePath)) {
+            throw new \InvalidArgumentException('Failed to extract audio from video.');
+        }
+
+        $metadata = $this->audioMetadataService->extractMetadata($musicAbsolutePath);
+
+        $thumbnailUrl = null;
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailExt = $request->file('thumbnail')->getClientOriginalExtension();
+            $thumbnailPath = 'thumbnails/'.Str::uuid().'.'.$thumbnailExt;
+            Storage::disk('public')->put($thumbnailPath, file_get_contents($request->file('thumbnail')->getRealPath()));
+            $thumbnailUrl = Storage::disk('public')->url($thumbnailPath);
+        }
+
+        $media = new Media();
+        $media->title = $data['title']
+            ?? $metadata['title']
+            ?? pathinfo($videoFile->getClientOriginalName(), PATHINFO_FILENAME);
+        $media->description = $data['description'] ?? null;
+        $media->source = 'local_audio';
+        $media->media_type = 'audio';
+        $media->video_path = $musicRelativePath;
+        $media->thumbnail_url = $thumbnailUrl;
+        $media->artist = $metadata['artist'];
+        $media->album = $metadata['album'];
+        $media->duration_seconds = $metadata['duration_seconds'];
+        $media->processed = true;
         $media->save();
 
         return $media;

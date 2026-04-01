@@ -9,6 +9,10 @@ class StoreMediaRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
+        if ($this->input('source') === 'video_to_audio') {
+            $this->merge(['media_type' => 'audio']);
+        }
+
         if ($this->input('source') !== 'youtube') {
             return;
         }
@@ -27,16 +31,18 @@ class StoreMediaRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'title'       => 'required_unless:source,youtube|string|max:255',
+            'title'       => 'required_unless:source,youtube,video_to_audio|string|max:255',
             'description' => 'nullable|string',
             'media_type'  => 'required|in:audio,video',
-            'source'      => 'required|in:youtube,hls,local_audio',
+            'source'      => 'required|in:youtube,hls,local_audio,video_to_audio',
             'video_id'    => 'required_if:source,youtube|string|regex:/^[A-Za-z0-9_-]{11}$/|unique:media,video_id',
             'thumbnail'   => 'nullable|mimes:jpeg,jpg,png|max:2000',
         ];
 
-        if (in_array($this->input('source'), ['hls', 'local_audio'])) {
-            if ($this->input('media_type') === 'audio') {
+        if (in_array($this->input('source'), ['hls', 'local_audio', 'video_to_audio'])) {
+            if ($this->input('source') === 'video_to_audio') {
+                $rules['file'] = 'required|file|mimes:mp4,mov,ogg,qt,mkv,webm|max:200000';
+            } elseif ($this->input('media_type') === 'audio') {
                 $rules['file'] = 'required|file|mimes:mp3,wav,ogg,flac,aac|max:50000';
             } else {
                 $rules['file'] = 'required|file|mimes:mp4,mov,ogg,qt|max:200000';
@@ -53,7 +59,7 @@ class StoreMediaRequest extends FormRequest
             'media_type.required'    => 'Media type (audio or video) is required.',
             'media_type.in'          => 'Media type must be audio or video.',
             'source.required'        => 'Source is required.',
-            'source.in'              => 'Source must be youtube, hls, or local_audio.',
+            'source.in'              => 'Source must be youtube, hls, local_audio, or video_to_audio.',
             'video_id.required_if'   => 'YouTube video ID is required when source is youtube.',
             'video_id.regex'         => 'YouTube video ID must be a valid 11-character ID or URL.',
             'video_id.unique'        => 'This media has already been added.',
