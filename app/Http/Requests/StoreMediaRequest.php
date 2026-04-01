@@ -3,9 +3,22 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 
 class StoreMediaRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('source') !== 'youtube') {
+            return;
+        }
+
+        $videoId = $this->extractYouTubeId((string) $this->input('video_id', ''));
+        if ($videoId) {
+            $this->merge(['video_id' => $videoId]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -18,7 +31,7 @@ class StoreMediaRequest extends FormRequest
             'description' => 'nullable|string',
             'media_type'  => 'required|in:audio,video',
             'source'      => 'required|in:youtube,hls,local_audio',
-            'video_id'    => 'required_if:source,youtube|string|unique:media,video_id',
+            'video_id'    => 'required_if:source,youtube|string|regex:/^[A-Za-z0-9_-]{11}$/|unique:media,video_id',
             'thumbnail'   => 'nullable|mimes:jpeg,jpg,png|max:2000',
         ];
 
@@ -42,6 +55,7 @@ class StoreMediaRequest extends FormRequest
             'source.required'        => 'Source is required.',
             'source.in'              => 'Source must be youtube, hls, or local_audio.',
             'video_id.required_if'   => 'YouTube video ID is required when source is youtube.',
+            'video_id.regex'         => 'YouTube video ID must be a valid 11-character ID or URL.',
             'video_id.unique'        => 'This media has already been added.',
             'file.required'          => 'A media file is required for this source type.',
             'file.mimes'             => 'Invalid file type for the selected media type.',
@@ -49,5 +63,48 @@ class StoreMediaRequest extends FormRequest
             'thumbnail.mimes'        => 'Thumbnail must be jpeg, jpg, or png.',
             'thumbnail.max'          => 'Thumbnail must not exceed 2MB.',
         ];
+    }
+
+    private function extractYouTubeId(string $value): ?string
+    {
+        $candidate = trim($value);
+
+        if (preg_match('/^[A-Za-z0-9_-]{11}$/', $candidate)) {
+            return $candidate;
+        }
+
+        if (Str::startsWith($candidate, 'www.')) {
+            $candidate = 'https://'.$candidate;
+        }
+
+        $url = parse_url($candidate);
+        if (! is_array($url)) {
+            return null;
+        }
+
+        $host = strtolower($url['host'] ?? '');
+        $path = trim($url['path'] ?? '', '/');
+
+        if (str_contains($host, 'youtu.be')) {
+            $id = explode('/', $path)[0] ?? '';
+
+            return preg_match('/^[A-Za-z0-9_-]{11}$/', $id) ? $id : null;
+        }
+
+        if (str_contains($host, 'youtube.com')) {
+            parse_str($url['query'] ?? '', $query);
+            $id = $query['v'] ?? null;
+
+            if (! $id && $path !== '') {
+                $parts = explode('/', $path);
+                if (in_array($parts[0] ?? '', ['embed', 'shorts', 'live'], true)) {
+                    $id = $parts[1] ?? null;
+                }
+            }
+
+            return is_string($id) && preg_match('/^[A-Za-z0-9_-]{11}$/', $id) ? $id : null;
+        }
+
+        return null;
     }
 }

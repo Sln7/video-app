@@ -44,7 +44,7 @@ class MediaService
         $media->description = $mediaData['description'];
         $media->source      = 'youtube';
         $media->media_type  = 'video';
-        $media->video_id    = $data['video_id'];
+        $media->video_id    = $mediaData['video_id'];
         $media->embed_url   = $mediaData['embed_url'];
         $media->thumbnail_url = $mediaData['thumbnail_url'];
         $media->processed   = true;
