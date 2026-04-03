@@ -32,6 +32,7 @@ class MediaService
     {
         return match ($data['source']) {
             'youtube'     => $this->createFromYouTube($data),
+            'youtube_to_audio' => $this->createAudioFromYouTube($data, $request),
             'hls'         => $this->createHLS($data, $request),
             'local_audio' => $this->createLocalAudio($data, $request),
             'video_to_audio' => $this->createMusicFromVideo($data, $request),
@@ -155,6 +156,74 @@ class MediaService
         $media->source = 'local_audio';
         $media->media_type = 'audio';
         $media->video_path = $musicRelativePath;
+        $media->thumbnail_url = $thumbnailUrl;
+        $media->artist = $metadata['artist'];
+        $media->album = $metadata['album'];
+        $media->duration_seconds = $metadata['duration_seconds'];
+        $media->processed = true;
+        $media->save();
+
+        return $media;
+    }
+
+    private function createAudioFromYouTube(array $data, Request $request): Media
+    {
+        $provider = $this->providerFactory->create('youtube');
+        $youtubeData = $provider->process($data['video_id']);
+
+        $ytDlpPath = config('services.yt_dlp.path', 'yt-dlp');
+        $probe = new Process([$ytDlpPath, '--version']);
+        $probe->run();
+
+        if (! $probe->isSuccessful()) {
+            throw new \InvalidArgumentException('YouTube audio conversion requires yt-dlp installed in the container.');
+        }
+
+        $baseName = (string) Str::uuid();
+        $outputTemplate = Storage::disk('public')->path('music/'.$baseName.'.%(ext)s');
+        $youtubeUrl = 'https://www.youtube.com/watch?v='.$youtubeData['video_id'];
+
+        $download = new Process([
+            $ytDlpPath,
+            '-x',
+            '--audio-format', 'mp3',
+            '--audio-quality', '0',
+            '--no-playlist',
+            '-o', $outputTemplate,
+            $youtubeUrl,
+        ]);
+        $download->setTimeout(600);
+        $download->run();
+
+        if (! $download->isSuccessful()) {
+            throw new \InvalidArgumentException('Failed to download and convert YouTube audio.');
+        }
+
+        $generated = glob(Storage::disk('public')->path('music/'.$baseName.'.*')) ?: [];
+        $absoluteAudioPath = $generated[0] ?? null;
+
+        if (! $absoluteAudioPath || ! file_exists($absoluteAudioPath)) {
+            throw new \InvalidArgumentException('YouTube audio file was not generated.');
+        }
+
+        $metadata = $this->audioMetadataService->extractMetadata($absoluteAudioPath);
+        $relativeAudioPath = 'music/'.basename($absoluteAudioPath);
+
+        $thumbnailUrl = $youtubeData['thumbnail_url'] ?? null;
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailExt = $request->file('thumbnail')->getClientOriginalExtension();
+            $thumbnailPath = 'thumbnails/'.Str::uuid().'.'.$thumbnailExt;
+            Storage::disk('public')->put($thumbnailPath, file_get_contents($request->file('thumbnail')->getRealPath()));
+            $thumbnailUrl = Storage::disk('public')->url($thumbnailPath);
+        }
+
+        $media = new Media();
+        $media->title = $data['title'] ?? $metadata['title'] ?? $youtubeData['title'];
+        $media->description = $data['description'] ?? $youtubeData['description'] ?? null;
+        $media->source = 'local_audio';
+        $media->media_type = 'audio';
+        $media->video_id = $youtubeData['video_id'];
+        $media->video_path = $relativeAudioPath;
         $media->thumbnail_url = $thumbnailUrl;
         $media->artist = $metadata['artist'];
         $media->album = $metadata['album'];

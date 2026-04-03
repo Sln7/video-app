@@ -13,7 +13,7 @@ class StoreMediaRequest extends FormRequest
             $this->merge(['media_type' => 'audio']);
         }
 
-        if ($this->input('source') !== 'youtube') {
+        if (! in_array($this->input('source'), ['youtube', 'youtube_to_audio'], true)) {
             return;
         }
 
@@ -31,11 +31,11 @@ class StoreMediaRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'title'       => 'required_unless:source,youtube,video_to_audio|string|max:255',
+            'title'       => 'required_unless:source,youtube,video_to_audio,youtube_to_audio|string|max:255',
             'description' => 'nullable|string',
             'media_type'  => 'required|in:audio,video',
-            'source'      => 'required|in:youtube,hls,local_audio,video_to_audio',
-            'video_id'    => 'required_if:source,youtube|string|regex:/^[A-Za-z0-9_-]{11}$/|unique:media,video_id',
+            'source'      => 'required|in:youtube,hls,local_audio,video_to_audio,youtube_to_audio',
+            'video_id'    => 'required_if:source,youtube,youtube_to_audio|string|regex:/^[A-Za-z0-9_-]{11}$/|unique:media,video_id',
             'thumbnail'   => 'nullable|mimes:jpeg,jpg,png|max:2000',
         ];
 
@@ -59,8 +59,8 @@ class StoreMediaRequest extends FormRequest
             'media_type.required'    => 'Media type (audio or video) is required.',
             'media_type.in'          => 'Media type must be audio or video.',
             'source.required'        => 'Source is required.',
-            'source.in'              => 'Source must be youtube, hls, local_audio, or video_to_audio.',
-            'video_id.required_if'   => 'YouTube video ID is required when source is youtube.',
+            'source.in'              => 'Source must be youtube, hls, local_audio, video_to_audio, or youtube_to_audio.',
+            'video_id.required_if'   => 'YouTube video ID is required when source is youtube or youtube_to_audio.',
             'video_id.regex'         => 'YouTube video ID must be a valid 11-character ID or URL.',
             'video_id.unique'        => 'This media has already been added.',
             'file.required'          => 'A media file is required for this source type.',

@@ -43,4 +43,8 @@ return [
         'path' => env('FFMPEG_PATH', 'ffmpeg'),
     ],
 
+    'yt_dlp' => [
+        'path' => env('YT_DLP_PATH', 'yt-dlp'),
+    ],
+
 ];

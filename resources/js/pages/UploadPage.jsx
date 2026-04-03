@@ -5,13 +5,15 @@ import api from '../api';
 
 const SOURCES = {
     video: ['youtube', 'hls'],
-    audio: ['local_audio'],
+    audio: ['local_audio', 'video_to_audio', 'youtube_to_audio'],
 };
 
 const SOURCE_LABELS = {
     youtube:     'YouTube',
     hls:         'Upload de vídeo (HLS)',
     local_audio: 'Upload de áudio',
+    video_to_audio: 'Converter vídeo enviado para áudio',
+    youtube_to_audio: 'YouTube URL/ID para áudio',
 };
 
 export default function UploadPage() {
@@ -133,7 +135,7 @@ export default function UploadPage() {
                     </div>
 
                     {/* Título */}
-                    {source !== 'youtube' && (
+                    {source !== 'youtube' && source !== 'youtube_to_audio' && (
                         <div>
                             <label className={label}>Título</label>
                             <input
@@ -152,24 +154,31 @@ export default function UploadPage() {
                     )}
 
                     {/* YouTube ID */}
-                    {source === 'youtube' && (
+                    {(source === 'youtube' || source === 'youtube_to_audio') && (
                         <div>
-                            <label className={label}>ID do vídeo no YouTube</label>
+                            <label className={label}>
+                                {source === 'youtube_to_audio' ? 'URL ou ID do vídeo no YouTube' : 'ID do vídeo no YouTube'}
+                            </label>
                             <input
                                 type="text"
-                                placeholder="ex: dQw4w9WgXcQ"
+                                placeholder={source === 'youtube_to_audio' ? 'ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ' : 'ex: dQw4w9WgXcQ'}
                                 value={form.video_id}
                                 onChange={e => setForm({ ...form, video_id: e.target.value })}
                                 className={input}
                             />
                             <p className="text-xs text-neutral-500 mt-1.5">
-                                Encontre na URL: youtube.com/watch?v=<strong className="text-neutral-400">dQw4w9WgXcQ</strong>
+                                {source === 'youtube_to_audio'
+                                    ? 'Cole o link completo do YouTube ou somente o ID do vídeo.'
+                                    : <>
+                                        Encontre na URL: youtube.com/watch?v=<strong className="text-neutral-400">dQw4w9WgXcQ</strong>
+                                      </>
+                                }
                             </p>
                         </div>
                     )}
 
                     {/* Arquivo */}
-                    {['hls', 'local_audio'].includes(source) && (
+                    {['hls', 'local_audio', 'video_to_audio'].includes(source) && (
                         <div>
                             <label className={label}>
                                 {source === 'local_audio' ? 'Arquivo de áudio' : 'Arquivo de vídeo'}
@@ -183,7 +192,9 @@ export default function UploadPage() {
                             <p className="text-xs text-neutral-500 mt-1.5">
                                 {source === 'local_audio'
                                     ? 'MP3, WAV, FLAC, OGG, AAC — máx 50MB. Tags e capa extraídas automaticamente.'
-                                    : 'MP4, MOV — máx 200MB. Convertido para HLS em segundo plano via FFmpeg.'}
+                                    : source === 'video_to_audio'
+                                        ? 'MP4, MOV, OGG, MKV, WEBM — máx 200MB. O áudio será extraído para MP3.'
+                                        : 'MP4, MOV — máx 200MB. Convertido para HLS em segundo plano via FFmpeg.'}
                             </p>
                         </div>
                     )}

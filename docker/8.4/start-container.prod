@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -e
+
+# Allow overriding the sail UID at runtime (useful if host UID differs)
+if [ -n "$WWWUSER" ]; then
+    usermod -u "$WWWUSER" sail
+fi
+
+# Ensure writable directories exist and have correct permissions
+mkdir -p /var/www/html/storage/framework/{sessions,views,cache} \
+         /var/www/html/storage/logs \
+         /var/www/html/bootstrap/cache
+
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+chown -R sail:sail /var/www/html/storage /var/www/html/bootstrap/cache
+
+# ── Laravel optimizations ────────────────────────────────────────────────────
+gosu sail php artisan config:cache
+gosu sail php artisan route:cache
+gosu sail php artisan view:cache
+
+# Create public/storage symlink (idempotent)
+gosu sail php artisan storage:link --quiet || true
+
+# ── Database migrations ───────────────────────────────────────────────────────
+gosu sail php artisan migrate --force
+
+# ── Start supervisor ──────────────────────────────────────────────────────────
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

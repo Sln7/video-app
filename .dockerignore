@@ -1,0 +1,48 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Node
+node_modules
+
+# PHP dev dependencies (installed in vendor stage)
+vendor
+
+# Environment files — never bake secrets into the image
+.env
+.env.*
+!.env.example
+
+# Build artifacts already handled by the frontend stage
+public/build
+public/hot
+
+# Dev / IDE
+.devcontainer
+.vscode
+.idea
+.fleet
+.zed
+.phpactor.json
+
+# Test / CI
+.phpunit.cache
+.phpunit.result.cache
+phpunit.xml
+
+# Local certs
+caddy-root.crt
+trust-https.sh
+
+# Storage (runtime data — mounted as volume in prod)
+storage/app
+storage/logs
+storage/framework/sessions
+storage/framework/views
+storage/framework/cache
+
+# Docs
+README.md
+readme.md
+openapi.yaml

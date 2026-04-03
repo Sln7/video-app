@@ -1,0 +1,87 @@
+# ── Stage 1: Node.js — build frontend assets ─────────────────────────────────
+FROM node:22-alpine AS frontend
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --no-audit
+COPY resources ./resources
+COPY vite.config.js postcss.config.js ./
+COPY public ./public
+RUN npm run build
+
+# ── Stage 2: Composer — install PHP dependencies (no dev) ────────────────────
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction \
+    --no-progress \
+    --no-scripts
+
+# ── Stage 3: Production runtime ───────────────────────────────────────────────
+FROM ubuntu:24.04
+
+ARG WWWGROUP=1000
+
+WORKDIR /var/www/html
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+ENV SUPERVISOR_PHP_COMMAND="/usr/bin/php -d variables_order=EGPCS /var/www/html/artisan serve --host=0.0.0.0 --port=80"
+ENV SUPERVISOR_PHP_USER="sail"
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
+    echo "Acquire::http::No-Cache true;" >> /etc/apt/apt.conf.d/99custom && \
+    echo "Acquire::BrokenProxy true;" >> /etc/apt/apt.conf.d/99custom
+
+RUN apt-get update && apt-get upgrade -y \
+    && mkdir -p /etc/apt/keyrings \
+    && apt-get install -y gnupg gosu curl ca-certificates zip unzip git supervisor \
+       sqlite3 libcap2-bin libpng-dev python3 python3-pip ffmpeg \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp \
+    && curl -sS 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14aa40ec0831756756d7f66c4f4ea0aae5267a6c' \
+       | gpg --dearmor | tee /etc/apt/keyrings/ppa_ondrej_php.gpg > /dev/null \
+    && echo "deb [signed-by=/etc/apt/keyrings/ppa_ondrej_php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble main" \
+       > /etc/apt/sources.list.d/ppa_ondrej_php.list \
+    && apt-get update \
+    && apt-get install -y \
+       php8.4-cli php8.4-pgsql php8.4-sqlite3 php8.4-gd \
+       php8.4-curl php8.4-mbstring php8.4-xml php8.4-zip \
+       php8.4-bcmath php8.4-intl php8.4-readline \
+       php8.4-redis php8.4-imagick php8.4-msgpack php8.4-igbinary \
+    && apt-get -y autoremove \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.4
+
+RUN groupadd --force -g $WWWGROUP sail \
+    && useradd -ms /bin/bash --no-user-group -g $WWWGROUP -u 1337 sail
+
+# Copy application source
+COPY --chown=sail:sail . .
+
+# Overlay compiled artifacts from build stages
+COPY --chown=sail:sail --from=vendor /app/vendor ./vendor
+COPY --chown=sail:sail --from=frontend /app/public/build ./public/build
+
+# Run package discovery now that vendor is present (no .env needed)
+RUN php artisan package:discover --ansi
+
+# Production supervisor and PHP configs
+COPY docker/8.4/supervisord.prod.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/8.4/php.ini /etc/php/8.4/cli/conf.d/99-sail.ini
+COPY docker/8.4/start-container.prod /usr/local/bin/start-container
+RUN chmod +x /usr/local/bin/start-container
+
+# Pre-create writable directories with correct ownership
+RUN mkdir -p storage/framework/{sessions,views,cache} storage/logs bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache \
+    && chown -R sail:sail storage bootstrap/cache
+
+EXPOSE 80
+
+ENTRYPOINT ["start-container"]
