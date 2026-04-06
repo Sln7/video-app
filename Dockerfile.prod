@@ -17,7 +17,8 @@ RUN composer install \
     --optimize-autoloader \
     --no-interaction \
     --no-progress \
-    --no-scripts
+    --no-scripts \
+    --ignore-platform-reqs
 
 # ── Stage 3: Production runtime ───────────────────────────────────────────────
 FROM ubuntu:24.04
